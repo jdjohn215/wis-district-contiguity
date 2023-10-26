@@ -107,7 +107,7 @@ plot_district_adj <- function(district, data = block.sf, with_water = FALSE){
 # create and save an adjacency graph
 build_and_save_adj_graph <- function(district){
   tm.plot <- plot_district_adj(district, with_water = TRUE)
-  tmap_save(tm.plot, paste0("adjacency-maps/", district, ".svg"))
+  tmap_save(tm.plot, paste0("adjacency-maps/assembly/", district, ".svg"))
 }
 
 # build and save ALL district adjacency graphs
