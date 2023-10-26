@@ -18,35 +18,40 @@ subset_district <- function(district, data = block.sf, with_water = FALSE){
   }
 }
 
-
 # identify component of membership for each block in a given district
 get_district_components <- function(district, data = block.sf, with_water = FALSE){
-  district.adj <- subset_district(district, data = data, with_water = with_water) %>%
+  district.blocks <- subset_district(district, data = data, with_water = with_water)
+  
+  district.adj <- district.blocks %>%
     tmaptools::get_neighbours()
-  igraph::graph_from_adj_list(district.adj) %>%
+  
+  district.components <- igraph::graph_from_adj_list(district.adj) %>%
     components()
+  
+  district.blocks %>%
+    mutate(component = district.components$membership) %>%
+    filter(SEN != "ZZZ") %>%
+    # ensure that components are numbered sequential, beginning with 1
+    mutate(component = as.numeric(as.factor(component)))
 }
+
+# all district components, excludes unassigned ZZZ blocks
+all.district.components <- map_df(setdiff(unique(block.sf$SEN), "ZZZ"),
+                                  get_district_components,
+                                  with_water = TRUE, .progress = T)
 
 # summary statistics for each component in a given district
-summarize_components <- function(district, data = block.sf, with_water = FALSE){
-  subset_district(district, data = data, with_water = with_water) %>%
-    mutate(component = get_district_components(district = district,
-                                               data = data, with_water = with_water)[[1]]) %>%
-    st_drop_geometry() %>%
-    filter(SEN != "ZZZ") %>%
-    mutate(component = as.numeric(as.factor(component))) %>%
-    group_by(component) %>%
-    summarise(blocks = n(),
-              populated_blocks = sum(pop > 0),
-              population = sum(pop)) %>%
-    mutate(district = district)
-}
-
-# all the components in each district
-all.dist.components <- map_df(unique(block.sf$SEN), summarize_components, with_water = TRUE, .progress = T)
+district.component.summary <- all.district.components %>%
+  st_drop_geometry() %>%
+  group_by(district = SEN, component) %>%
+  summarise(blocks = n(),
+            populated_blocks = sum(pop > 0),
+            population = sum(pop)) %>%
+  ungroup() %>%
+  arrange(district, component)
 
 # summary statistics for each district
-district.summary <- all.dist.components %>%
+district.summary <- district.component.summary %>%
   group_by(district) %>%
   summarise(extra_components = sum(component > 1),
             blocks_disconnected = sum(blocks[component > 1]),
@@ -54,21 +59,27 @@ district.summary <- all.dist.components %>%
             disconnected_population = sum(population[component > 1]))
 
 # save tables
-all.dist.components %>%
+district.component.summary %>%
   arrange(district, component) %>%
   select(district, component, blocks, populated_blocks, population) %>%
   write_csv("tables/AllSenateDistrictComponents.csv")
 write_csv(district.summary, "tables/SenateDistrictComponentsSummary.csv")
+
+# save all block-district-component assignments
+all.district.components %>%
+  # add the ZZZ blocks, they have NA component
+  bind_rows(block.sf %>% filter(SEN == "ZZZ")) %>%
+  st_drop_geometry() %>%
+  select(GEOID20, SEN, component) %>% 
+  write_csv("tables/blocks-with-senate-components.csv")
 ################################################################################
 
 # this function visualizes the adjacency graph for a given senate district
-plot_district_adj <- function(district, data = block.sf, with_water = FALSE){
-  district.blocks <- subset_district(district = district, data = data,
-                                     with_water = with_water) %>%
-    mutate(component = get_district_components(district = district, 
-                                               data = data, with_water = with_water)[[1]]) %>%
-    filter(SEN != "ZZZ") %>%
-    mutate(component = as.factor(as.numeric(as.factor(component))))
+#   automatically uses water connections
+plot_district_adj <- function(district, data = block.sf){
+  district.blocks <- all.district.components %>%
+    filter(SEN == district) %>%
+    mutate(component = as.factor(component))
   
   nb.district <- poly2nb(district.blocks)
   centers <- st_centroid(st_geometry(district.blocks))
@@ -105,7 +116,7 @@ plot_district_adj <- function(district, data = block.sf, with_water = FALSE){
 
 # create and save an adjacency graph
 build_and_save_adj_graph <- function(district){
-  tm.plot <- plot_district_adj(district, with_water = TRUE)
+  tm.plot <- plot_district_adj(district)
   tmap_save(tm.plot, paste0("adjacency-maps/senate/", district, ".jpg"))
 }
 
