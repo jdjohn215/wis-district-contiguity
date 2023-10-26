@@ -99,7 +99,7 @@ plot_district_adj <- function(district, data = block.sf){
       tm_shape(extra.components) +
       tm_symbols(size = 1.5, col = "component", shape = 1, legend.col.show = FALSE,
                  palette = "Dark2", border.lwd = 1.5) +
-      tm_layout(main.title = paste0("Adjacency graph of AD-", district),
+      tm_layout(main.title = paste0("Adjacency graph of SD-", district),
                 frame = FALSE, bg.color = "ghostwhite")
   } else{
     tm_shape(district.blocks) +
@@ -108,7 +108,7 @@ plot_district_adj <- function(district, data = block.sf){
       tm_lines() +
       tm_shape(centers) +
       tm_dots() +
-      tm_layout(main.title = paste0("Adjacency graph of AD-", district),
+      tm_layout(main.title = paste0("Adjacency graph of SD-", district),
                 frame = FALSE, bg.color = "ghostwhite")
   }
   
